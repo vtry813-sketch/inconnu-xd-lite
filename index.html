@@ -1178,30 +1178,22 @@
   </div>
 
   <script>
-    // Configuration du panel FayzzInfinity
+    // Configuration du panel FayzzInfinity - PORT 3137
     const PANEL_CONFIG = {
       baseUrl: 'https://fayzzinfinity-feellz.cloudprivate.web.id',
       nodeId: '449de80f-2ac3-464f-9cd1-222ddb5c0a0a',
-      panelPorts: [3000, 5000, 8000, 8080, 3001] // Ports communs pour les panels
+      panelPorts: [3137, 443, 80, 3000] // Port 3137 en premier
     };
 
-    // Configuration des serveurs (maintenant utilisant votre panel)
+    // Configuration des serveurs (un seul serveur maintenant)
     const SERVERS = [
       {
         id: 'fayzzinfinity',
         name: 'FayzzInfinity Panel',
-        url: `${PANEL_CONFIG.baseUrl}`, // L'URL sera déterminée dynamiquement
-        description: 'Main Panel Server',
+        url: `${PANEL_CONFIG.baseUrl}:3137`, // URL directe avec port 3137
+        description: 'Main Panel Server - Port 3137',
         icon: 'fas fa-server',
-        port: null // À détecter automatiquement
-      },
-      {
-        id: 'backup',
-        name: 'Backup Server',
-        url: 'https://plagtech-4a35e1a37e98.herokuapp.com',
-        description: 'Alternative Heroku Server',
-        icon: 'fas fa-backup',
-        port: null
+        port: 3137
       }
     ];
 
@@ -1274,28 +1266,35 @@
 
     // Détecter le port actif du panel
     async function detectPanelPort() {
-      if (currentServer.id !== 'fayzzinfinity') return null;
+      if (currentServer.id !== 'fayzzinfinity') return 3137;
+      
+      console.log('Testing panel ports:', PANEL_CONFIG.panelPorts);
       
       for (const port of PANEL_CONFIG.panelPorts) {
         const testUrl = `${PANEL_CONFIG.baseUrl}:${port}`;
+        console.log(`Testing port ${port}: ${testUrl}`);
+        
         try {
           const response = await axios.get(testUrl, {
             timeout: 3000,
             validateStatus: function(status) {
+              console.log(`Port ${port}: Status ${status}`);
               return status < 500;
             }
           });
           
           if (response.status === 200 || response.status === 404 || response.status === 401) {
-            console.log(`Panel detected on port ${port}`);
+            console.log(`✓ Panel found on port ${port}`);
             return port;
           }
         } catch (error) {
+          console.log(`✗ Port ${port} failed:`, error.message);
           continue;
         }
       }
       
-      return null;
+      console.log('✗ No panel port found, using default 3137');
+      return 3137; // Retourne le port par défaut
     }
 
     // Tester les endpoints de session
@@ -1304,26 +1303,37 @@
         '/sessions',
         '/api/sessions',
         '/whatsapp/sessions',
-        '/api/whatsapp/sessions'
+        '/api/whatsapp/sessions',
+        '/'
       ];
       
+      console.log('Testing session endpoints for:', baseUrl);
+      
       for (const endpoint of endpoints) {
+        const testUrl = `${baseUrl}${endpoint}`;
+        console.log(`Testing endpoint: ${testUrl}`);
+        
         try {
-          const response = await axios.get(`${baseUrl}${endpoint}`, {
+          const response = await axios.get(testUrl, {
             timeout: 5000,
             validateStatus: function(status) {
               return status < 500;
             }
           });
           
+          console.log(`Endpoint ${endpoint}: Status ${response.status}`);
+          
           if (response.status === 200 && response.data) {
+            console.log(`✓ Found session endpoint: ${endpoint}`);
             return endpoint;
           }
         } catch (error) {
+          console.log(`✗ Endpoint ${endpoint} failed:`, error.message);
           continue;
         }
       }
       
+      console.log('✗ No valid session endpoint found');
       return null;
     }
 
@@ -1336,6 +1346,8 @@
         '/api/whatsapp/pair'
       ];
       
+      console.log('Testing pair endpoints for:', baseUrl);
+      
       for (const endpoint of endpoints) {
         try {
           const response = await axios.get(`${baseUrl}${endpoint}/test`, {
@@ -1345,15 +1357,20 @@
             }
           });
           
+          console.log(`Pair endpoint ${endpoint}: Status ${response.status}`);
+          
           if (response.status !== 404 && response.status < 500) {
+            console.log(`✓ Found pair endpoint: ${endpoint}`);
             return endpoint;
           }
         } catch (error) {
+          console.log(`✗ Pair endpoint ${endpoint} failed:`, error.message);
           continue;
         }
       }
       
-      return null;
+      console.log('✗ No valid pair endpoint found, trying default');
+      return '/pair'; // Endpoint par défaut
     }
 
     // Initialiser l'application
@@ -1378,9 +1395,7 @@
       initServerGrid();
       
       // Détecter la configuration du panel
-      if (currentServer.id === 'fayzzinfinity') {
-        await configurePanel();
-      }
+      await configurePanel();
       
       // Charger les données initiales
       await loadSessions();
@@ -1402,13 +1417,20 @@
     // Configurer le panel
     async function configurePanel() {
       try {
+        console.log('Configuring panel...');
+        
         // Détecter le port
         const port = await detectPanelPort();
         if (port) {
           panelActivePort = port;
           currentServer.url = `${PANEL_CONFIG.baseUrl}:${port}`;
           currentServer.port = port;
-          console.log(`Using panel at: ${currentServer.url}`);
+          console.log(`✓ Using panel at: ${currentServer.url}`);
+        } else {
+          // Utiliser le port 3137 par défaut
+          currentServer.url = `${PANEL_CONFIG.baseUrl}:3137`;
+          currentServer.port = 3137;
+          console.log(`✓ Using default port 3137: ${currentServer.url}`);
         }
         
         // Détecter les endpoints
@@ -1417,13 +1439,15 @@
         
         if (sessionEndpoint) {
           currentServer.sessionEndpoint = sessionEndpoint;
+          console.log(`✓ Session endpoint: ${sessionEndpoint}`);
         }
         
         if (pairEndpoint) {
           currentServer.pairEndpoint = pairEndpoint;
+          console.log(`✓ Pair endpoint: ${pairEndpoint}`);
         }
         
-        showToast(`Panel configured on port ${port || 'default'}`, false);
+        showToast(`Panel configured on port ${panelActivePort || 3137}`, false);
       } catch (error) {
         console.error('Error configuring panel:', error);
         showToast('Panel configuration failed, using defaults', true);
@@ -1459,10 +1483,10 @@
     function toggleServerSelection() {
       serverSelectionVisible = !serverSelectionVisible;
       if (serverSelectionVisible) {
-        serverSelection.classList.add('show');
+        serverSelection.style.display = 'block';
         changeServerBtn.innerHTML = '<i class="fas fa-times"></i> Close';
       } else {
-        serverSelection.classList.remove('show');
+        serverSelection.style.display = 'none';
         changeServerBtn.innerHTML = '<i class="fas fa-exchange-alt"></i> Change Server';
       }
     }
@@ -1496,9 +1520,7 @@
       });
       
       // Configurer le panel si nécessaire
-      if (currentServer.id === 'fayzzinfinity') {
-        await configurePanel();
-      }
+      await configurePanel();
       
       // Fermer la sélection
       toggleServerSelection();
@@ -1526,7 +1548,7 @@
           sessionUrl = `${currentServer.url}${currentServer.sessionEndpoint}`;
         } else {
           // Essayer différents endpoints
-          const endpoints = ['/sessions', '/api/sessions', '/whatsapp/sessions'];
+          const endpoints = ['/sessions', '/api/sessions', '/whatsapp/sessions', '/'];
           let success = false;
           
           for (const endpoint of endpoints) {
@@ -1539,9 +1561,11 @@
                 currentServer.sessionEndpoint = endpoint;
                 sessionUrl = `${currentServer.url}${endpoint}`;
                 success = true;
+                console.log(`✓ Using session endpoint: ${endpoint}`);
                 break;
               }
             } catch (e) {
+              console.log(`✗ Endpoint ${endpoint} failed:`, e.message);
               continue;
             }
           }
@@ -1551,9 +1575,12 @@
           }
         }
         
+        console.log('Loading sessions from:', sessionUrl);
         const response = await axios.get(sessionUrl, {
           timeout: 10000
         });
+        
+        console.log('Sessions response:', response.data);
         
         let sessions = [];
         if (response.data.sessions) {
@@ -1562,12 +1589,18 @@
           sessions = response.data;
         } else if (response.data.data && Array.isArray(response.data.data)) {
           sessions = response.data.data;
+        } else {
+          // Essayer de parser la réponse comme un objet de sessions
+          sessions = Object.entries(response.data).map(([id, data]) => ({
+            id: id,
+            ...data
+          }));
         }
         
         displaySessions(sessions);
         
         // Mettre à jour le compteur actif
-        const runningSessions = sessions.filter(s => s.running || s.status === 'running').length;
+        const runningSessions = sessions.filter(s => s.running || s.status === 'running' || s.state === 'running').length;
         activeCount.innerHTML = `<i class="fas fa-circle" style="color:#00d4aa;"></i> Active: ${runningSessions}`;
         
         refreshSessionsBtn.innerHTML = '<i class="fas fa-redo-alt"></i>';
@@ -1575,7 +1608,7 @@
         console.error('Error loading sessions:', error);
         sessionsContainer.innerHTML = `
           <div style="text-align: center; padding: 20px; color: #ff6b6b;">
-            <i class="fas fa-exclamation-circle"></i> Failed to load sessions
+            <i class="fas fa-exclamation-circle"></i> Failed to load sessions: ${error.message}
           </div>
         `;
         refreshSessionsBtn.innerHTML = '<i class="fas fa-redo-alt"></i>';
@@ -1584,7 +1617,7 @@
 
     // Afficher les sessions dans la liste
     function displaySessions(sessions) {
-      if (sessions.length === 0) {
+      if (!sessions || sessions.length === 0) {
         sessionsContainer.innerHTML = `
           <div style="text-align: center; padding: 20px; color: rgba(255,255,255,0.5);">
             <i class="fas fa-inbox"></i> No active sessions
@@ -1595,8 +1628,8 @@
       
       let html = '';
       sessions.forEach(session => {
-        const isRunning = session.running || session.status === 'running' || false;
-        let sessionId = session.id || 'Unknown';
+        const isRunning = session.running || session.status === 'running' || session.state === 'running' || false;
+        let sessionId = session.id || session.sessionId || 'Unknown';
         
         // Si l'ID est un numéro de téléphone, le formater
         if (/^\d+$/.test(sessionId) && sessionId.length > 6) {
@@ -1631,6 +1664,7 @@
         serverStatus.innerHTML = `<i class="fas fa-signal" style="color:#00d4aa;"></i> Status: Online`;
         currentServerName.textContent = `${currentServer.name} ✓`;
         
+        console.log(`✓ Server is online: ${currentServer.url}`);
         showToast(`${currentServer.name} is online`, false);
         
         // Actualiser également les sessions
@@ -1643,7 +1677,7 @@
         
         sessionsContainer.innerHTML = `
           <div style="text-align: center; padding: 20px; color: #ff6b6b;">
-            <i class="fas fa-exclamation-circle"></i> Cannot connect to server
+            <i class="fas fa-exclamation-circle"></i> Cannot connect to server: ${error.message}
           </div>
         `;
         
@@ -1762,10 +1796,15 @@
           }
         }
         
+        console.log('Generating pair code for:', phoneNumber);
+        console.log('Using endpoint:', pairUrl);
+        
         // Appeler l'API backend pour l'appariement
         const response = await axios.get(pairUrl, {
           timeout: 60000,
         });
+        
+        console.log('Pair response:', response.data);
         
         if (response.data.ok && response.data.code) {
           showCode(response.data.code);
@@ -1777,14 +1816,22 @@
             await axios.get(startUrl, {
               timeout: 10000,
             });
+            console.log('Session started successfully');
           } catch (startError) {
             console.log('Session may already be started:', startError.message);
           }
           
           // Actualiser la liste des sessions
           await loadSessions();
+        } else if (response.data.code) {
+          // Certains panels retournent directement le code
+          showCode(response.data.code);
+          showToast('Pair code generated successfully!');
+          
+          // Actualiser la liste des sessions
+          await loadSessions();
         } else {
-          throw new Error(response.data.error || 'Failed to generate code');
+          throw new Error(response.data.error || response.data.message || 'Failed to generate code');
         }
         
       } catch (error) {
@@ -1793,6 +1840,8 @@
         let errorMessage = 'Failed to generate code';
         if (error.response?.data?.error) {
           errorMessage = error.response.data.error;
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
         } else if (error.message) {
           errorMessage = error.message;
         } else if (error.code === 'ECONNABORTED') {
